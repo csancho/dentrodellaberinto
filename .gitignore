@@ -1,0 +1,22 @@
+# Archivos de configuración local
+app/config/parameters.php
+
+# Cachés y logs
+var/cache/
+var/logs/
+var/sessions/
+
+# Archivos temporales
+vendor/
+node_modules/
+composer.lock
+package-lock.json
+
+# Archivos generados por PrestaShop
+upload/
+download/
+export/
+import/
+
+admin*/autoupgrade/
+install/

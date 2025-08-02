@@ -1,0 +1,162 @@
+# Production Docker Compose with Traefik
+version: '3.8'
+
+services:
+  # Only include Traefik and production services
+  traefik:
+    image: traefik:v3.0
+    container_name: prestashop_traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - CF_API_EMAIL=${CF_API_EMAIL}
+      - CF_DNS_API_TOKEN=${CF_DNS_API_TOKEN}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik:/etc/traefik
+      - ./traefik/acme:/acme
+      - ./traefik/logs:/logs
+    command:
+      # API and dashboard
+      - --api.dashboard=true
+      - --api.insecure=false
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=prestashop-network
+      # File provider
+      - --providers.file.directory=/etc/traefik
+      - --providers.file.watch=true
+      # Certificate resolvers
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme/acme.json
+      - --certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53
+      # Global redirect to HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      # Logging
+      - --log.level=INFO
+      - --log.filepath=/logs/traefik.log
+      - --accesslog=true
+      - --accesslog.filepath=/logs/access.log
+      # Security
+      - --entrypoints.websecure.http.tls.options=default@file
+      # Metrics
+      - --metrics.prometheus=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.dentrodellaberinto.com`)"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+    networks:
+      - prestashop-network
+
+  prestashop:
+    build: .
+    container_name: prestashop_app
+    expose:
+      - "80"
+    volumes:
+      - ./prestashop:/var/www/html/prestashop
+      - ./uploads:/var/www/html/prestashop/upload
+      - ./img:/var/www/html/prestashop/img
+    environment:
+      - DB_SERVER=mysql
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWD=${DB_PASSWORD}
+      - DB_PREFIX=ps_
+      - ADMIN_MAIL=${PS_ADMIN_EMAIL}
+      - ADMIN_PASSWD=${PS_ADMIN_PASSWORD}
+    depends_on:
+      - traefik
+      - mysql
+      - redis
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prestashop.rule=Host(`dentrodellaberinto.com`) || Host(`www.dentrodellaberinto.com`)"
+      - "traefik.http.routers.prestashop.tls=true"
+      - "traefik.http.routers.prestashop.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.prestashop.middlewares=prestashop-chain"
+      - "traefik.http.services.prestashop.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.www-redirect.redirectregex.regex=^https://www\\.(.*)"
+      - "traefik.http.middlewares.www-redirect.redirectregex.replacement=https://$${1}"
+      - "traefik.http.middlewares.www-redirect.redirectregex.permanent=true"
+      - "traefik.http.middlewares.prestashop-chain.chain.middlewares=www-redirect,security-headers,prestashop-compress,prestashop-ratelimit"
+      - "traefik.http.middlewares.prestashop-compress.compress=true"
+      - "traefik.http.middlewares.prestashop-ratelimit.ratelimit.average=100"
+      - "traefik.http.middlewares.prestashop-ratelimit.ratelimit.burst=200"
+      - "traefik.http.middlewares.prestashop-ratelimit.ratelimit.period=1m"
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.0
+    container_name: prestashop_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+    command: --default-authentication-plugin=mysql_native_password
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: prestashop_redis
+    volumes:
+      - redis_data:/data
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: prestashop_phpmyadmin
+    expose:
+      - "80"
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: ${DB_USER}
+      PMA_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+    depends_on:
+      - mysql
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`db.dentrodellaberinto.com`)"
+      - "traefik.http.routers.phpmyadmin.tls=true"
+      - "traefik.http.routers.phpmyadmin.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.phpmyadmin.middlewares=phpmyadmin-auth,security-headers"
+      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+      - "traefik.http.middlewares.phpmyadmin-auth.basicauth.users=${PHPMYADMIN_AUTH}"
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+networks:
+  prestashop-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+    driver: local
+  redis_data:
+    driver: local

@@ -82,13 +82,17 @@ This project includes a complete Docker setup for local development:
 
 #### Quick Start
 1. **Prerequisites**: Install Docker and Docker Compose
-2. **Setup**: Run `./docker-setup.sh` to initialize the environment
+2. **One-Command Setup**: Run `./quick-start.sh` (Linux/Mac) or `.\quick-start.ps1` (Windows)
 3. **Access**: Open http://localhost:8090 for PrestaShop
+
+#### Alternative Setup
+- **Manual Setup**: Run `./docker-setup.sh` or `.\docker-setup.ps1`
+- **Permissions Fix**: Run `./fix-permissions.sh` if needed
 
 #### Docker Services
 - **PrestaShop App**: http://localhost:8090 (PHP 8.1 + Apache)
-- **PostgreSQL Database**: localhost:5433 (prestashop/prestashop)
-- **pgAdmin**: http://localhost:8091 (database management)
+- **MySQL Database**: localhost:3307 (prestashop/prestashop)
+- **phpMyAdmin**: http://localhost:8091 (database management)
 - **Mailcatcher**: http://localhost:1090 (email testing)
 - **Redis**: localhost:6380 (caching)
 
@@ -106,7 +110,7 @@ This project includes a complete Docker setup for local development:
 - Database data persists in Docker volumes
 
 ### Manual Installation (Alternative)
-1. Install PHP 8.1+ and PostgreSQL 12+
+1. Install PHP 8.1+ and MySQL 5.6+
 2. Run `make install` to set up dependencies and assets
 3. Configure database in `config/settings.inc.php` (auto-generated during install)
 4. Access admin panel at `/admin/` (directory name varies for security)

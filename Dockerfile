@@ -1,6 +1,6 @@
 FROM php:8.1-apache
 
-# Install system dependencies
+# Install system dependencies including latest ICU
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
@@ -15,27 +15,28 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     libonig-dev \
     libxslt-dev \
-    libpq-dev \
-    postgresql-client \
+    default-mysql-client \
     nodejs \
     npm \
     && rm -rf /var/lib/apt/lists/*
 
-# Configure and install PHP extensions
+# Configure and install PHP extensions with proper intl configuration
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-configure intl \
     && docker-php-ext-install -j$(nproc) \
         gd \
         zip \
         intl \
         pdo \
-        pdo_pgsql \
-        pgsql \
+        pdo_mysql \
+        mysqli \
         mbstring \
         xml \
         xsl \
         opcache \
         bcmath \
-        soap
+        soap \
+    && docker-php-ext-enable pdo_mysql mysqli intl
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -51,6 +52,7 @@ RUN { \
     echo 'max_execution_time = 300'; \
     echo 'max_input_vars = 10000'; \
     echo 'date.timezone = UTC'; \
+    echo 'short_open_tag = Off'; \
     echo 'opcache.enable = 1'; \
     echo 'opcache.memory_consumption = 128'; \
     echo 'opcache.max_accelerated_files = 4000'; \
@@ -76,15 +78,42 @@ WORKDIR /var/www/html
 # Copy application files
 COPY . .
 
-# Set proper permissions
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html
-
-# Create necessary directories with proper permissions
+# Create and set permissions for all necessary directories
 RUN mkdir -p /var/www/html/prestashop/var/cache \
     && mkdir -p /var/www/html/prestashop/var/logs \
-    && chown -R www-data:www-data /var/www/html/prestashop/var \
-    && chmod -R 777 /var/www/html/prestashop/var
+    && mkdir -p /var/www/html/prestashop/img/genders \
+    && mkdir -p /var/www/html/prestashop/img/os \
+    && mkdir -p /var/www/html/prestashop/img/p \
+    && mkdir -p /var/www/html/prestashop/img/c \
+    && mkdir -p /var/www/html/prestashop/img/m \
+    && mkdir -p /var/www/html/prestashop/img/su \
+    && mkdir -p /var/www/html/prestashop/img/s \
+    && mkdir -p /var/www/html/prestashop/img/cms \
+    && mkdir -p /var/www/html/prestashop/img/scenes \
+    && mkdir -p /var/www/html/prestashop/upload \
+    && mkdir -p /var/www/html/prestashop/download \
+    && mkdir -p /var/www/html/prestashop/mails \
+    && mkdir -p /var/www/html/prestashop/modules \
+    && mkdir -p /var/www/html/prestashop/themes \
+    && mkdir -p /var/www/html/prestashop/translations \
+    && mkdir -p /var/www/html/prestashop/override \
+    && mkdir -p /var/www/html/prestashop/cache/smarty/cache \
+    && mkdir -p /var/www/html/prestashop/cache/smarty/compile \
+    && mkdir -p /var/www/html/prestashop/config \
+    && chown -R www-data:www-data /var/www/html \
+    && find /var/www/html -type d -exec chmod 755 {} \; \
+    && find /var/www/html -type f -exec chmod 644 {} \; \
+    && chmod -R 777 /var/www/html/prestashop/var \
+    && chmod -R 777 /var/www/html/prestashop/img \
+    && chmod -R 777 /var/www/html/prestashop/upload \
+    && chmod -R 777 /var/www/html/prestashop/download \
+    && chmod -R 777 /var/www/html/prestashop/cache \
+    && chmod -R 777 /var/www/html/prestashop/config \
+    && chmod -R 777 /var/www/html/prestashop/modules \
+    && chmod -R 777 /var/www/html/prestashop/themes \
+    && chmod -R 777 /var/www/html/prestashop/translations \
+    && chmod -R 777 /var/www/html/prestashop/mails \
+    && chmod -R 777 /var/www/html/prestashop/override
 
 # Expose port 80
 EXPOSE 80

@@ -44,19 +44,19 @@ fi
 
 # Create necessary directories
 print_status "Creating necessary directories..."
-mkdir -p docker/postgres/init
+mkdir -p docker/mysql/init
 mkdir -p uploads
 mkdir -p img
 
-# Create PostgreSQL initialization script
-print_status "Creating PostgreSQL initialization script..."
-cat > docker/postgres/init/01-create-extensions.sql << 'EOF'
--- Create extensions if needed
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "unaccent";
+# Create MySQL initialization script
+print_status "Creating MySQL initialization script..."
+cat > docker/mysql/init/01-create-database.sql << 'EOF'
+-- Create PrestaShop database if it doesn't exist
+CREATE DATABASE IF NOT EXISTS prestashop CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- Set timezone
-SET timezone = 'UTC';
+-- Grant privileges to prestashop user
+GRANT ALL PRIVILEGES ON prestashop.* TO 'prestashop'@'%';
+FLUSH PRIVILEGES;
 EOF
 
 # Create environment file for development
@@ -66,10 +66,11 @@ cat > .env << 'EOF'
 COMPOSE_PROJECT_NAME=prestashop-dev
 
 # Database Configuration
-DB_HOST=postgres
+DB_HOST=mysql
 DB_NAME=prestashop
 DB_USER=prestashop
 DB_PASSWORD=prestashop
+DB_ROOT_PASSWORD=root
 
 # PrestaShop Configuration
 PS_ADMIN_EMAIL=admin@prestashop.local
@@ -96,8 +97,8 @@ docker-compose build
 print_status "Starting containers..."
 docker-compose up -d
 
-# Wait for PostgreSQL to be ready
-print_status "Waiting for PostgreSQL to be ready..."
+# Wait for MySQL to be ready
+print_status "Waiting for MySQL to be ready..."
 sleep 30
 
 # Check if containers are running
@@ -109,21 +110,71 @@ else
     exit 1
 fi
 
+# Fix PrestaShop permissions automatically
+print_status "Fixing PrestaShop permissions for installation..."
+
+# Create necessary directories inside container
+print_status "Creating required directories..."
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/genders 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/os 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/p 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/c 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/m 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/su 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/s 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/cms 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/img/scenes 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/upload 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/download 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/cache/smarty/cache 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/cache/smarty/compile 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/config 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/var/cache 2>/dev/null || true
+docker exec prestashop_app mkdir -p /var/www/html/prestashop/var/logs 2>/dev/null || true
+
+# Set proper ownership and permissions
+print_status "Setting proper ownership and permissions..."
+docker exec prestashop_app chown -R www-data:www-data /var/www/html/prestashop 2>/dev/null || true
+docker exec prestashop_app find /var/www/html/prestashop -type d -exec chmod 755 {} \; 2>/dev/null || true
+docker exec prestashop_app find /var/www/html/prestashop -type f -exec chmod 644 {} \; 2>/dev/null || true
+
+# Set writable permissions for installation directories
+print_status "Setting writable permissions for installation..."
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/var 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/img 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/upload 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/download 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/cache 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/config 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/modules 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/themes 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/translations 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/mails 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/override 2>/dev/null || true
+docker exec prestashop_app chmod -R 777 /var/www/html/prestashop/install 2>/dev/null || true
+
+print_success "Permissions configured successfully!"
+
 # Display access information
 echo ""
 echo "🎉 PrestaShop Docker environment is ready!"
 echo ""
 echo "📋 Access Information:"
-echo "   PrestaShop Frontend: http://localhost:8090"
-echo "   PrestaShop Admin:    http://localhost:8090/admin (check container logs for exact URL)"
-echo "   pgAdmin:             http://localhost:8091"
-echo "   Mailcatcher:         http://localhost:1090"
+echo "   🌐 Development Mode:"
+echo "     PrestaShop:        http://localhost:8090"
+echo "     phpMyAdmin:        http://localhost:8091"
+echo "     Mailcatcher:       http://localhost:1090"
+echo ""
+echo "   🚀 Production Mode (with Traefik):"
+echo "     PrestaShop:        https://dentrodellaberinto.com"
+echo "     phpMyAdmin:        https://db.dentrodellaberinto.com"
+echo "     Traefik Dashboard: https://traefik.dentrodellaberinto.com"
 echo ""
 echo "🔑 Default Credentials:"
 echo "   Admin Email:     admin@prestashop.local"
 echo "   Admin Password:  admin123"
 echo "   Database:        prestashop/prestashop"
-echo "   pgAdmin:         admin@example.com/admin123"
+echo "   MySQL Root:      root/root"
 echo ""
 echo "🛠️  Useful Commands:"
 echo "   Start:           docker-compose up -d"
@@ -140,5 +191,18 @@ echo ""
 
 print_warning "Note: If this is your first time, you may need to run the PrestaShop installer."
 print_warning "The admin directory name will be randomized for security. Check container logs to find it."
+
+echo ""
+print_status "🔧 Testing PHP Configuration:"
+echo "   You can test PHP settings at: http://localhost:8090/test-php-config.php"
+echo "   Remove this file before going to production!"
+
+echo ""
+print_status "🌐 Production Setup (Traefik):"
+echo "   1. Copy .env.example to .env and configure your settings"
+echo "   2. Set up Cloudflare DNS API token for Let's Encrypt"
+echo "   3. Generate auth hashes with: htpasswd -nb admin password"
+echo "   4. Point your domain DNS to this server"
+echo "   5. Run: docker-compose up -d traefik"
 
 print_success "Setup complete! Happy coding! 🚀"
