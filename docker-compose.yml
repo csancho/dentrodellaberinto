@@ -63,7 +63,7 @@ services:
     ports:
       - "8091:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@prestashop.local
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin123
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     volumes:
