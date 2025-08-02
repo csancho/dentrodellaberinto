@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Documentation
+*.md
+CHANGELOG.txt
+INSTALL.txt
+LICENSE*
+
+# Development files
+.vscode
+.idea
+*.log
+
+# Cache and temporary files
+prestashop/var/cache/*
+prestashop/var/logs/*
+prestashop/cache/*
+*.tmp
+
+# Node modules
+node_modules
+npm-debug.log*
+
+# Composer
+vendor/*/tests
+vendor/*/test
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

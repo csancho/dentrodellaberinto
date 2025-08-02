@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+  # PrestaShop Application
+  prestashop:
+    build: .
+    container_name: prestashop_app
+    ports:
+      - "8090:80"
+    volumes:
+      - ./prestashop:/var/www/html/prestashop
+      - ./uploads:/var/www/html/prestashop/upload
+      - ./img:/var/www/html/prestashop/img
+    environment:
+      - DB_SERVER=postgres
+      - DB_NAME=prestashop
+      - DB_USER=prestashop
+      - DB_PASSWD=prestashop
+      - DB_PREFIX=ps_
+      - ADMIN_MAIL=admin@prestashop.local
+      - ADMIN_PASSWD=admin123
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: prestashop_postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: prestashop
+      POSTGRES_USER: prestashop
+      POSTGRES_PASSWORD: prestashop
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  # Redis for caching
+  redis:
+    image: redis:7.0-alpine
+    container_name: prestashop_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  # pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: prestashop_pgadmin
+    ports:
+      - "8091:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@prestashop.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  # Mailcatcher for email testing
+  mailcatcher:
+    image: sj26/mailcatcher
+    container_name: prestashop_mailcatcher
+    ports:
+      - "1090:1080"  # Web interface
+      - "1026:1025"  # SMTP server
+    networks:
+      - prestashop-network
+    restart: unless-stopped
+
+  # Node.js for asset building (development)
+  node:
+    image: node:18-alpine
+    container_name: prestashop_node
+    working_dir: /app
+    volumes:
+      - ./prestashop:/app
+    command: sh -c "npm install && npm run watch"
+    networks:
+      - prestashop-network
+    profiles:
+      - dev
+    restart: "no"
+
+networks:
+  prestashop-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  redis_data:
+    driver: local
